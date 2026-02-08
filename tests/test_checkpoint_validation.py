@@ -99,7 +99,7 @@ def test_resume_from_checkpoint_valid():
         assert training_args.resume_from_checkpoint == valid_checkpoint
 
 
-def test_resume_from_checkpoint_none_when_model_not_set():
+def test_validation_skipped_when_model_name_or_path_missing():
     """Test that resume_from_checkpoint validation only happens when model_name_or_path is set."""
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = os.path.join(tmpdir, "output")
@@ -113,12 +113,15 @@ def test_resume_from_checkpoint_none_when_model_not_set():
         # Remove model_name_or_path to test the condition
         del args["model_name_or_path"]
 
-        # This should work without error even though checkpoint doesn't exist
-        # because model_name_or_path is not set
+        # model_name_or_path is required, so this should raise an error
+        # The checkpoint validation should not happen because model_name_or_path is None
         try:
             _, _, training_args, _, _ = get_train_args(args)
-            # If model_name_or_path is required, this will raise an error
-            # Otherwise, checkpoint should not be validated
-        except (ValueError, TypeError):
-            # Expected if model_name_or_path is required
-            pass
+            # If we reach here, the validation was skipped (which is correct)
+            # The checkpoint should remain set since validation didn't run
+            assert training_args.resume_from_checkpoint == nonexistent_checkpoint
+        except (ValueError, TypeError) as e:
+            # This is expected if model_name_or_path is required by the system
+            # In this case, the test passes because we're testing that validation
+            # only happens when both are set
+            assert "model_name_or_path" in str(e).lower() or "required" in str(e).lower()
