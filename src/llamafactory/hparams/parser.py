@@ -417,6 +417,32 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
     else:
         can_resume_from_checkpoint = True
 
+    # Validate resume_from_checkpoint path if explicitly set
+    if (
+        training_args.resume_from_checkpoint is not None
+        and can_resume_from_checkpoint
+        and model_args.model_name_or_path is not None
+    ):
+        checkpoint_valid = False
+        if os.path.isdir(training_args.resume_from_checkpoint):
+            # Check if it's a valid checkpoint using get_last_checkpoint
+            last_checkpoint = get_last_checkpoint(training_args.resume_from_checkpoint)
+            if last_checkpoint is not None:
+                checkpoint_valid = True
+                training_args.resume_from_checkpoint = last_checkpoint
+            # Also check if the directory itself contains checkpoint files
+            elif any(
+                os.path.isfile(os.path.join(training_args.resume_from_checkpoint, name)) for name in CHECKPOINT_NAMES
+            ):
+                checkpoint_valid = True
+
+        if not checkpoint_valid:
+            logger.warning_rank0(
+                f"Checkpoint path '{training_args.resume_from_checkpoint}' does not exist or does not contain "
+                f"valid checkpoints. Falling back to loading from model_name_or_path: '{model_args.model_name_or_path}'."
+            )
+            training_args.resume_from_checkpoint = None
+
     if (
         training_args.resume_from_checkpoint is None
         and training_args.do_train
